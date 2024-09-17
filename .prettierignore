@@ -1,0 +1,8 @@
+*-lock.*
+*.lock
+*.log
+
+/tsconfig.json
+
+build/
+dist/

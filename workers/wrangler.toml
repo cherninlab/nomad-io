@@ -1,0 +1,15 @@
+name = "nomad-io-worker"
+main = "dist/worker.js"  # Adjust this path if necessary
+compatibility_date = "2023-05-18"
+
+[durable_objects]
+bindings = [
+	{ name = "GAME_STATE", class_name = "GameStateDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["GameStateDO"]
+
+[build]
+command = "npm run worker:build"
