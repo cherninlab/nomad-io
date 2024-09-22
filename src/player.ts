@@ -12,18 +12,14 @@ export class Player {
 	public spriteUrl: string;
 	public angle: number;
 	public velocity: PIXI.Point;
-	private acceleration: number;
-	private deceleration: number;
-	private friction: number;
-	private maxSpeed: number;
-	private rotationSpeed: number;
-	private slowdownFactor: number;
+	public acceleration: number;
+	public deceleration: number;
+	public friction: number;
+	public maxSpeed: number;
+	public rotationSpeed: number;
+	public slowdownFactor: number;
 
-	constructor(
-		_: PIXI.Application,
-		name: string,
-		spriteUrl: string,
-	) {
+	constructor(_: PIXI.Application, name: string, spriteUrl: string) {
 		this.id = Math.random().toString(36).substr(2, 9);
 		this.name = name;
 		this.spriteUrl = spriteUrl;
@@ -73,8 +69,8 @@ export class Player {
 			this.velocity.y -= direction.y * this.deceleration;
 		} else {
 			// Apply friction
-			this.velocity.x *= (1 - this.friction);
-			this.velocity.y *= (1 - this.friction);
+			this.velocity.x *= 1 - this.friction;
+			this.velocity.y *= 1 - this.friction;
 		}
 
 		// Limit speed
@@ -109,7 +105,8 @@ export class Player {
 		const distanceVectorNormalized = new PIXI.Point(dx / distance, dy / distance);
 
 		// Calculate the dot product of the velocity vector and the distance vector
-		const dotProduct = this.velocity.x * distanceVectorNormalized.x + this.velocity.y * distanceVectorNormalized.y;
+		const dotProduct =
+			this.velocity.x * distanceVectorNormalized.x + this.velocity.y * distanceVectorNormalized.y;
 
 		// Calculate the angle between the player's direction and the enemy
 		const playerDirection = new PIXI.Point(Math.sin(this.angle), -Math.cos(this.angle));
@@ -120,7 +117,7 @@ export class Player {
 
 		if (dotProduct > 0) {
 			// Moving towards the enemy
-			if (collisionAngle < Math.PI / 4) {  // 45 degrees
+			if (collisionAngle < Math.PI / 4) {
 				// Head-on collision, slow down
 				this.slowdownFactor = 0.5;
 				return 'slow';

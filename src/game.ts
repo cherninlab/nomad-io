@@ -7,6 +7,7 @@ import { NetworkManager } from './networkManager';
 import { GameState } from './types';
 import { UI } from './ui';
 import { HUD } from './hud';
+import { Pane } from 'tweakpane';
 
 export class Game {
 	private app: PIXI.Application;
@@ -87,17 +88,35 @@ export class Game {
 		// Initialize and add the HUD
 		this.hud = new HUD(this.player);
 		this.app.stage.addChild(this.hud.container);
+
+		// Set up Tweakpane
+		this.setupTweakpane();
 	}
 
+	private setupTweakpane() {
+		const pane = new Pane();
+
+		const folder = pane.addFolder({
+			title: 'Car Dynamics',
+			expanded: true,
+		});
+
+		// Bind directly to the player's properties
+		folder.addBinding(this.player, 'acceleration', { min: 0, max: 1 });
+		folder.addBinding(this.player, 'deceleration', { min: 0, max: 1 });
+		folder.addBinding(this.player, 'friction', { min: 0, max: 1 });
+		folder.addBinding(this.player, 'maxSpeed', { min: 0, max: 20 });
+		folder.addBinding(this.player, 'rotationSpeed', { min: 0, max: 0.2 });
+	}
 
 	private setupKeyboardControls() {
 		const keys: { [key: string]: boolean } = {};
 
-		window.addEventListener('keydown', e => {
+		window.addEventListener('keydown', (e) => {
 			keys[e.key.toLowerCase()] = true;
 		});
 
-		window.addEventListener('keyup', e => {
+		window.addEventListener('keyup', (e) => {
 			keys[e.key.toLowerCase()] = false;
 		});
 
@@ -147,7 +166,7 @@ export class Game {
 	}
 
 	private handleServerUpdate(gameState: GameState) {
-		Object.values(gameState.players).forEach(playerState => {
+		Object.values(gameState.players).forEach((playerState) => {
 			if (playerState.id === this.player.id) {
 				this.player.updateFromServer(playerState);
 			} else {
