@@ -20,7 +20,7 @@ export class Player {
 	private slowdownFactor: number;
 
 	constructor(
-		private app: PIXI.Application,
+		_: PIXI.Application,
 		name: string,
 		spriteUrl: string,
 	) {
@@ -150,10 +150,7 @@ export class Player {
 	}
 
 	respawn() {
-		this.position.set(
-			this.app.renderer.width / 2,
-			this.app.renderer.height / 2
-		);
+		this.position.set(0, 0);
 		this.sprite.position.copyFrom(this.position);
 		this.health = this.maxHealth;
 		this.velocity.set(0, 0);

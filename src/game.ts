@@ -17,6 +17,7 @@ export class Game {
 	private networkManager!: NetworkManager;
 	private ui!: UI;
 	private hud!: HUD;
+	private camera!: PIXI.Container;
 
 	constructor() {
 		this.app = new PIXI.Application();
@@ -68,20 +69,26 @@ export class Game {
 	}
 
 	private initializeGame() {
+		this.camera = new PIXI.Container();
+		this.app.stage.addChild(this.camera);
+
+		// Initialize game objects
 		this.world.initialize();
 		this.player.initialize();
 		this.resourceManager.initialize();
 		this.enemyManager.initialize();
 
-		this.app.stage.addChild(this.world.container);
-		this.app.stage.addChild(this.resourceManager.container);
-		this.app.stage.addChild(this.enemyManager.container);
-		this.app.stage.addChild(this.player.sprite);
+		// Add game objects to the camera container
+		this.camera.addChild(this.world.container);
+		this.camera.addChild(this.resourceManager.container);
+		this.camera.addChild(this.enemyManager.container);
+		this.camera.addChild(this.player.sprite);
 
 		// Initialize and add the HUD
 		this.hud = new HUD(this.player);
 		this.app.stage.addChild(this.hud.container);
 	}
+
 
 	private setupKeyboardControls() {
 		const keys: { [key: string]: boolean } = {};
@@ -110,7 +117,7 @@ export class Game {
 	}
 
 	private gameLoop() {
-		this.world.update(this.player.position);
+		// Update game objects
 		this.resourceManager.update();
 		this.enemyManager.update(this.player);
 		this.checkCollisions();
@@ -118,6 +125,13 @@ export class Game {
 		// Update HUD elements
 		this.hud.update();
 
+		// Center the camera on the player
+		this.camera.position.set(
+			-this.player.position.x + this.app.screen.width / 2,
+			-this.player.position.y + this.app.screen.height / 2
+		);
+
+		// Send network updates
 		this.networkManager.sendUpdate({
 			playerId: this.player.id,
 			position: { x: this.player.position.x, y: this.player.position.y },

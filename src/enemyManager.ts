@@ -26,8 +26,8 @@ export class EnemyManager {
 	initialize() {
 		for (let i = 0; i < 10; i++) {
 			const sprite = PIXI.Sprite.from('assets/enemy.png');
-			sprite.x = Math.random() * this.app.screen.width * 2;
-			sprite.y = Math.random() * this.app.screen.height * 2;
+			sprite.x = Math.random() * this.app.screen.width * 2 - this.app.screen.width;
+			sprite.y = Math.random() * this.app.screen.height * 2 - this.app.screen.height;
 			const enemy = new Enemy(sprite);
 			this.enemies.push(enemy);
 			this.container.addChild(sprite);

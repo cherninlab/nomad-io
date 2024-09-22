@@ -14,8 +14,8 @@ export class ResourceManager {
 	initialize() {
 		for (let i = 0; i < 100; i++) {
 			const resource = PIXI.Sprite.from('assets/resource.png');
-			resource.x = Math.random() * this.app.screen.width * 2;
-			resource.y = Math.random() * this.app.screen.height * 2;
+			resource.x = Math.random() * this.app.screen.width * 2 - this.app.screen.width;
+			resource.y = Math.random() * this.app.screen.height * 2 - this.app.screen.height;
 			this.resources.push(resource);
 			this.container.addChild(resource);
 		}
