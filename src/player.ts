@@ -11,16 +11,13 @@ export class Player {
 	public maxHealth: number;
 	public spriteUrl: string;
 	public angle: number;
-	public isStunned: boolean;
-	private stunDuration: number;
-	private stunTimer: number;
-
-	private velocity: number;
+	public velocity: PIXI.Point;
 	private acceleration: number;
 	private deceleration: number;
 	private friction: number;
 	private maxSpeed: number;
 	private rotationSpeed: number;
+	private slowdownFactor: number;
 
 	constructor(
 		private app: PIXI.Application,
@@ -36,17 +33,15 @@ export class Player {
 		this.health = 100;
 		this.maxHealth = 100;
 		this.angle = 0;
-		this.isStunned = false;
-		this.stunDuration = 30; // Number of frames to stay stunned
-		this.stunTimer = 0;
 
 		// Movement properties
-		this.velocity = 0;
+		this.velocity = new PIXI.Point(0, 0);
 		this.acceleration = 0.2;
 		this.deceleration = 0.1;
 		this.friction = 0.05;
 		this.maxSpeed = 5;
 		this.rotationSpeed = 0.05;
+		this.slowdownFactor = 1;
 	}
 
 	initialize() {
@@ -60,15 +55,6 @@ export class Player {
 		movingForward: boolean,
 		movingBackward: boolean
 	) {
-		if (this.isStunned) {
-			this.stunTimer++;
-			if (this.stunTimer >= this.stunDuration) {
-				this.isStunned = false;
-				this.stunTimer = 0;
-			}
-			return; // Skip control while stunned
-		}
-
 		// Handle rotation
 		if (turningLeft) {
 			this.angle -= this.rotationSpeed;
@@ -78,58 +64,82 @@ export class Player {
 		}
 
 		// Update velocity
+		const direction = new PIXI.Point(Math.sin(this.angle), -Math.cos(this.angle));
 		if (movingForward) {
-			this.velocity += this.acceleration;
+			this.velocity.x += direction.x * this.acceleration;
+			this.velocity.y += direction.y * this.acceleration;
 		} else if (movingBackward) {
-			this.velocity -= this.deceleration;
+			this.velocity.x -= direction.x * this.deceleration;
+			this.velocity.y -= direction.y * this.deceleration;
 		} else {
 			// Apply friction
-			if (this.velocity > 0) {
-				this.velocity -= this.friction;
-				if (this.velocity < 0) this.velocity = 0;
-			} else {
-				this.velocity += this.friction;
-				if (this.velocity > 0) this.velocity = 0;
-			}
+			this.velocity.x *= (1 - this.friction);
+			this.velocity.y *= (1 - this.friction);
 		}
 
 		// Limit speed
-		if (this.velocity > this.maxSpeed) this.velocity = this.maxSpeed;
-		if (this.velocity < -this.maxSpeed / 2) this.velocity = -this.maxSpeed / 2;
+		const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+		if (speed > this.maxSpeed) {
+			this.velocity.x = (this.velocity.x / speed) * this.maxSpeed;
+			this.velocity.y = (this.velocity.y / speed) * this.maxSpeed;
+		}
+
+		// Apply slowdown factor
+		this.velocity.x *= this.slowdownFactor;
+		this.velocity.y *= this.slowdownFactor;
+
+		// Reset slowdown factor for next frame
+		this.slowdownFactor = 1;
 
 		// Update position
-		this.position.x += Math.sin(this.angle) * this.velocity;
-		this.position.y -= Math.cos(this.angle) * this.velocity;
+		this.position.x += this.velocity.x;
+		this.position.y += this.velocity.y;
 		this.sprite.position.copyFrom(this.position);
 
 		// Rotate the sprite to match the angle
 		this.sprite.rotation = this.angle;
 	}
 
+	collideWithEnemy(enemyPosition: PIXI.Point): 'kill' | 'slow' | 'none' {
+		const dx = enemyPosition.x - this.position.x;
+		const dy = enemyPosition.y - this.position.y;
+		const distance = Math.sqrt(dx * dx + dy * dy);
+
+		// Normalize the distance vector
+		const distanceVectorNormalized = new PIXI.Point(dx / distance, dy / distance);
+
+		// Calculate the dot product of the velocity vector and the distance vector
+		const dotProduct = this.velocity.x * distanceVectorNormalized.x + this.velocity.y * distanceVectorNormalized.y;
+
+		// Calculate the angle between the player's direction and the enemy
+		const playerDirection = new PIXI.Point(Math.sin(this.angle), -Math.cos(this.angle));
+		const collisionAngle = Math.acos(
+			playerDirection.x * distanceVectorNormalized.x +
+			playerDirection.y * distanceVectorNormalized.y
+		);
+
+		if (dotProduct > 0) {
+			// Moving towards the enemy
+			if (collisionAngle < Math.PI / 4) {  // 45 degrees
+				// Head-on collision, slow down
+				this.slowdownFactor = 0.5;
+				return 'slow';
+			} else {
+				// Side or back collision, kill the enemy
+				return 'kill';
+			}
+		} else {
+			// Moving away from the enemy
+			return 'none';
+		}
+	}
+
 	takeDamage(amount: number) {
 		this.health -= amount;
 		if (this.health <= 0) {
 			this.health = 0;
-			// Handle player death (e.g., respawn or game over)
 			this.respawn();
 		}
-	}
-
-	collideWithEnemy() {
-		// Calculate damage based on speed
-		const impactSpeed = Math.abs(this.velocity);
-		const damage = impactSpeed * 10; // Adjust multiplier as needed
-		this.takeDamage(damage);
-
-		// Stop the car
-		this.velocity = 0;
-		this.isStunned = true;
-		this.stunTimer = 0;
-
-		// Enemy also deals damage to the player
-		// Optional: You can implement enemy damage here if desired
-
-		// Enemy stays where it was hit (no further action needed)
 	}
 
 	updateFromServer(playerState: PlayerState) {
@@ -146,8 +156,7 @@ export class Player {
 		);
 		this.sprite.position.copyFrom(this.position);
 		this.health = this.maxHealth;
-		this.velocity = 0;
-		this.isStunned = false;
+		this.velocity.set(0, 0);
 		this.angle = 0;
 	}
 }

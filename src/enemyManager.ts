@@ -36,7 +36,6 @@ export class EnemyManager {
 
 	update(player: Player) {
 		const maxSpeed = 1.5;
-		const separationDistance = 30;
 
 		this.enemies.forEach(enemy => {
 			const sprite = enemy.sprite;
@@ -46,33 +45,9 @@ export class EnemyManager {
 			const dy = player.position.y - sprite.y;
 			const distance = Math.sqrt(dx * dx + dy * dy);
 
-			// Avoid getting in front of the car
-			const angleToPlayer = Math.atan2(dy, dx);
-			const angleDifference = Math.abs(angleToPlayer - player.angle);
-			const frontAvoidanceAngle = Math.PI / 4; // 45 degrees
-
-			if (
-				angleDifference > frontAvoidanceAngle &&
-				angleDifference < Math.PI * 2 - frontAvoidanceAngle
-			) {
-				// Move towards the player
-				enemy.velocity.x += (dx / distance) * 0.1;
-				enemy.velocity.y += (dy / distance) * 0.1;
-			}
-
-			// Avoid other enemies
-			this.enemies.forEach(otherEnemy => {
-				if (enemy !== otherEnemy) {
-					const otherSprite = otherEnemy.sprite;
-					const dx = sprite.x - otherSprite.x;
-					const dy = sprite.y - otherSprite.y;
-					const distance = Math.sqrt(dx * dx + dy * dy);
-					if (distance < separationDistance && distance > 0) {
-						enemy.velocity.x += (dx / distance) * 0.05;
-						enemy.velocity.y += (dy / distance) * 0.05;
-					}
-				}
-			});
+			// Simple AI: move towards the player
+			enemy.velocity.x += (dx / distance) * 0.1;
+			enemy.velocity.y += (dy / distance) * 0.1;
 
 			// Limit speed
 			const speed = Math.sqrt(
@@ -90,12 +65,26 @@ export class EnemyManager {
 	}
 
 	checkCollisions(player: Player) {
-		for (const enemy of this.enemies) {
+		for (let i = this.enemies.length - 1; i >= 0; i--) {
+			const enemy = this.enemies[i];
 			if (this.checkCollision(player.sprite, enemy.sprite)) {
-				// Handle collision
-				player.collideWithEnemy();
-				// Optionally, apply damage to enemy or remove it
-				// For now, enemy stays where it was hit
+				const collisionResult = player.collideWithEnemy(new PIXI.Point(enemy.sprite.x, enemy.sprite.y));
+
+				switch (collisionResult) {
+					case 'kill':
+						// Remove the enemy
+						this.container.removeChild(enemy.sprite);
+						this.enemies.splice(i, 1);
+						console.log('Enemy killed!');
+						break;
+					case 'slow':
+						// The player is already slowed down in the Player class
+						console.log('Player slowed down!');
+						break;
+					case 'none':
+						// No action needed
+						break;
+				}
 			}
 		}
 	}
