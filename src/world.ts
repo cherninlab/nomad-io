@@ -13,6 +13,9 @@ export class World {
 		background.drawRect(0, 0, this.app.screen.width * 2, this.app.screen.height * 2);
 		background.endFill();
 		this.container.addChild(background);
+
+		this.container.x = -this.app.screen.width / 2;
+		this.container.y = -this.app.screen.height / 2;
 	}
 
 	update(playerPosition: PIXI.Point) {

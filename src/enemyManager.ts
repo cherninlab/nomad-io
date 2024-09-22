@@ -93,7 +93,7 @@ export class EnemyManager {
 		for (const enemy of this.enemies) {
 			if (this.checkCollision(player.sprite, enemy.sprite)) {
 				// Handle collision
-				player.collideWithEnemy(enemy);
+				player.collideWithEnemy();
 				// Optionally, apply damage to enemy or remove it
 				// For now, enemy stays where it was hit
 			}

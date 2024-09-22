@@ -141,12 +141,13 @@ export class Player {
 
 	respawn() {
 		this.position.set(
-			Math.random() * this.app.renderer.width * 2,
-			Math.random() * this.app.renderer.height * 2
+			this.app.renderer.width / 2,
+			this.app.renderer.height / 2
 		);
 		this.sprite.position.copyFrom(this.position);
 		this.health = this.maxHealth;
 		this.velocity = 0;
 		this.isStunned = false;
+		this.angle = 0;
 	}
 }
