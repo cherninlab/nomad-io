@@ -19,7 +19,14 @@ export class Player {
 	public rotationSpeed: number;
 	public slowdownFactor: number;
 
-	constructor(_: PIXI.Application, name: string, spriteUrl: string) {
+	private isLocalPlayer: boolean;
+
+	constructor(
+		private app: PIXI.Application,
+		name: string,
+		spriteUrl: string,
+		isLocalPlayer: boolean = true
+	) {
 		this.id = Math.random().toString(36).substr(2, 9);
 		this.name = name;
 		this.spriteUrl = spriteUrl;
@@ -38,11 +45,25 @@ export class Player {
 		this.maxSpeed = 5;
 		this.rotationSpeed = 0.05;
 		this.slowdownFactor = 1;
+
+		this.isLocalPlayer = isLocalPlayer;
 	}
 
 	initialize() {
 		this.sprite.anchor.set(0.5);
 		this.respawn();
+	}
+
+	update(delta: number) {
+		if (this.isLocalPlayer) {
+			// Apply velocity to position
+			this.position.x += this.velocity.x * delta;
+			this.position.y += this.velocity.y * delta;
+		}
+
+		// Update the sprite position and rotation
+		this.sprite.position.copyFrom(this.position);
+		this.sprite.rotation = this.angle;
 	}
 
 	control(
@@ -51,6 +72,8 @@ export class Player {
 		movingForward: boolean,
 		movingBackward: boolean
 	) {
+		if (!this.isLocalPlayer) return;
+
 		// Handle rotation
 		if (turningLeft) {
 			this.angle -= this.rotationSpeed;
@@ -86,14 +109,6 @@ export class Player {
 
 		// Reset slowdown factor for next frame
 		this.slowdownFactor = 1;
-
-		// Update position
-		this.position.x += this.velocity.x;
-		this.position.y += this.velocity.y;
-		this.sprite.position.copyFrom(this.position);
-
-		// Rotate the sprite to match the angle
-		this.sprite.rotation = this.angle;
 	}
 
 	collideWithEnemy(enemyPosition: PIXI.Point): 'kill' | 'slow' | 'none' {
@@ -112,7 +127,7 @@ export class Player {
 		const playerDirection = new PIXI.Point(Math.sin(this.angle), -Math.cos(this.angle));
 		const collisionAngle = Math.acos(
 			playerDirection.x * distanceVectorNormalized.x +
-			playerDirection.y * distanceVectorNormalized.y
+				playerDirection.y * distanceVectorNormalized.y
 		);
 
 		if (dotProduct > 0) {
@@ -140,17 +155,41 @@ export class Player {
 	}
 
 	updateFromServer(playerState: PlayerState) {
-		this.position.set(playerState.position.x, playerState.position.y);
-		this.sprite.position.copyFrom(this.position);
+		if (!this.isLocalPlayer) {
+			this.position.set(playerState.position.x, playerState.position.y);
+			this.angle = playerState.angle;
+		}
 		this.resources = playerState.resources;
 		this.health = playerState.health;
+		this.spriteUrl = playerState.spriteUrl;
+
+		// Update the sprite if the spriteUrl has changed
+		if (this.sprite.texture.baseTexture.resource.url !== this.spriteUrl) {
+			this.sprite.texture = PIXI.Texture.from(this.spriteUrl);
+		}
 	}
 
 	respawn() {
-		this.position.set(0, 0);
+		this.position.set(
+			Math.random() * this.app.screen.width,
+			Math.random() * this.app.screen.height
+		);
 		this.sprite.position.copyFrom(this.position);
 		this.health = this.maxHealth;
 		this.velocity.set(0, 0);
 		this.angle = 0;
+		this.resources = 0;
+	}
+
+	getState(): PlayerState {
+		return {
+			id: this.id,
+			name: this.name,
+			position: { x: this.position.x, y: this.position.y },
+			angle: this.angle,
+			resources: this.resources,
+			health: this.health,
+			spriteUrl: this.spriteUrl,
+		};
 	}
 }

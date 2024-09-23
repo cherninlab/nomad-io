@@ -2,83 +2,66 @@ import * as PIXI from 'pixi.js';
 import { Player } from './player';
 import { EnemyState } from './types';
 
-export class Enemy {
+class Enemy {
 	public sprite: PIXI.Sprite;
 	public velocity: PIXI.Point;
 	public health: number;
 
-	constructor(sprite: PIXI.Sprite) {
-		this.sprite = sprite;
+	constructor(texture: PIXI.Texture, x: number, y: number) {
+		this.sprite = new PIXI.Sprite(texture);
+		this.sprite.anchor.set(0.5);
+		this.sprite.position.set(x, y);
 		this.velocity = new PIXI.Point(0, 0);
-		this.health = 100; // Default health
+		this.health = 100;
+	}
+
+	update(deltaTime: number) {
+		this.sprite.x += this.velocity.x * deltaTime;
+		this.sprite.y += this.velocity.y * deltaTime;
 	}
 }
 
 export class EnemyManager {
 	public container: PIXI.Container;
-	private enemies: Enemy[];
+	private enemies: Map<string, Enemy> = new Map();
+	private enemyTexture: PIXI.Texture;
 
-	constructor(private app: PIXI.Application) {
+	constructor(_: PIXI.Application) {
 		this.container = new PIXI.Container();
-		this.enemies = [];
+		this.enemyTexture = PIXI.Texture.from('assets/enemy.png');
 	}
 
 	initialize() {
-		for (let i = 0; i < 10; i++) {
-			const sprite = PIXI.Sprite.from('assets/enemy.png');
-			sprite.x = Math.random() * this.app.screen.width * 2 - this.app.screen.width;
-			sprite.y = Math.random() * this.app.screen.height * 2 - this.app.screen.height;
-			const enemy = new Enemy(sprite);
-			this.enemies.push(enemy);
-			this.container.addChild(sprite);
-		}
+		// You can initialize some enemies here if needed
+		// For now, we'll leave it empty and let the server dictate enemy creation
 	}
 
-	update(player: Player) {
-		const maxSpeed = 1.5;
-
+	update(player: Player, deltaTime: number) {
 		this.enemies.forEach(enemy => {
-			const sprite = enemy.sprite;
-
-			// Move towards the player
-			const dx = player.position.x - sprite.x;
-			const dy = player.position.y - sprite.y;
+			// Simple AI: move towards the player
+			const dx = player.position.x - enemy.sprite.x;
+			const dy = player.position.y - enemy.sprite.y;
 			const distance = Math.sqrt(dx * dx + dy * dy);
 
-			// Simple AI: move towards the player
-			enemy.velocity.x += (dx / distance) * 0.1;
-			enemy.velocity.y += (dy / distance) * 0.1;
+			const speed = 1; // Adjust as needed
+			enemy.velocity.x = (dx / distance) * speed;
+			enemy.velocity.y = (dy / distance) * speed;
 
-			// Limit speed
-			const speed = Math.sqrt(
-				enemy.velocity.x * enemy.velocity.x + enemy.velocity.y * enemy.velocity.y
-			);
-			if (speed > maxSpeed) {
-				enemy.velocity.x = (enemy.velocity.x / speed) * maxSpeed;
-				enemy.velocity.y = (enemy.velocity.y / speed) * maxSpeed;
-			}
-
-			// Update position
-			sprite.x += enemy.velocity.x;
-			sprite.y += enemy.velocity.y;
+			enemy.update(deltaTime);
 		});
 	}
 
 	checkCollisions(player: Player) {
-		for (let i = this.enemies.length - 1; i >= 0; i--) {
-			const enemy = this.enemies[i];
+		this.enemies.forEach((enemy, id) => {
 			if (this.checkCollision(player.sprite, enemy.sprite)) {
-				const collisionResult = player.collideWithEnemy(new PIXI.Point(enemy.sprite.x, enemy.sprite.y));
+				const collisionResult = player.collideWithEnemy(enemy.sprite.position);
 
 				switch (collisionResult) {
 					case 'kill':
-						// Remove the enemy
-						this.container.removeChild(enemy.sprite);
-						this.enemies.splice(i, 1);
+						this.removeEnemy(id);
 						console.log('Enemy killed!');
 						break;
 					case 'slow':
-						// The player is already slowed down in the Player class
 						console.log('Player slowed down!');
 						break;
 					case 'none':
@@ -86,7 +69,7 @@ export class EnemyManager {
 						break;
 				}
 			}
-		}
+		});
 	}
 
 	private checkCollision(a: PIXI.Sprite, b: PIXI.Sprite): boolean {
@@ -101,12 +84,32 @@ export class EnemyManager {
 	}
 
 	updateFromServer(enemyStates: EnemyState[]) {
-		enemyStates.forEach((state, index) => {
-			const enemy = this.enemies[index];
+		const currentEnemyIds = new Set(this.enemies.keys());
+
+		enemyStates.forEach(state => {
+			let enemy = this.enemies.get(state.id);
 			if (enemy) {
-				enemy.sprite.x = state.position.x;
-				enemy.sprite.y = state.position.y;
+				// Update existing enemy
+				enemy.sprite.position.set(state.position.x, state.position.y);
+				enemy.health = state.health;
+			} else {
+				// Create new enemy
+				enemy = new Enemy(this.enemyTexture, state.position.x, state.position.y);
+				this.enemies.set(state.id, enemy);
+				this.container.addChild(enemy.sprite);
 			}
+			currentEnemyIds.delete(state.id);
 		});
+
+		// Remove enemies that are no longer in the server state
+		currentEnemyIds.forEach(id => this.removeEnemy(id));
+	}
+
+	private removeEnemy(id: string) {
+		const enemy = this.enemies.get(id);
+		if (enemy) {
+			this.container.removeChild(enemy.sprite);
+			this.enemies.delete(id);
+		}
 	}
 }

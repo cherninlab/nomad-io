@@ -28,12 +28,16 @@ export class GameStateDO {
 	}
 
 	async handleSession(webSocket: WebSocket) {
-		webSocket.accept();
+		(webSocket as any).accept();
 		this.sessions.push(webSocket);
 
 		webSocket.addEventListener('message', async (msg) => {
-			const data = JSON.parse(msg.data as string) as ClientMessage;
-			await this.handleMessage(webSocket, data);
+			try {
+				const data = JSON.parse(msg.data as string) as ClientMessage;
+				await this.handleMessage(webSocket, data);
+			} catch (error) {
+				console.error('Error handling message:', error);
+			}
 		});
 
 		webSocket.addEventListener('close', () => {

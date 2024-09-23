@@ -4,14 +4,16 @@ import { World } from './world';
 import { ResourceManager } from './resourceManager';
 import { EnemyManager } from './enemyManager';
 import { NetworkManager } from './networkManager';
-import { GameState } from './types';
+import { GameState, PlayerState, ClientMessage } from './types';
 import { UI } from './ui';
 import { HUD } from './hud';
 import { Pane } from 'tweakpane';
+import { Ticker } from 'pixi.js';
 
 export class Game {
 	private app: PIXI.Application;
 	private player!: Player;
+	private otherPlayers: Map<string, Player> = new Map();
 	private world!: World;
 	private resourceManager!: ResourceManager;
 	private enemyManager!: EnemyManager;
@@ -19,6 +21,7 @@ export class Game {
 	private ui!: UI;
 	private hud!: HUD;
 	private camera!: PIXI.Container;
+	private gameContainer!: PIXI.Container;
 
 	constructor() {
 		this.app = new PIXI.Application();
@@ -28,7 +31,7 @@ export class Game {
 		await this.app.init({
 			width: window.innerWidth,
 			height: window.innerHeight,
-			backgroundColor: 0x000000,
+			backgroundColor: 0x87ceeb, // Sky blue background
 			...options,
 		});
 
@@ -57,40 +60,44 @@ export class Game {
 		// Remove UI container after selection
 		this.app.stage.removeChild(this.ui.container);
 
-		this.world = new World(this.app);
-		this.enemyManager = new EnemyManager(this.app);
-		this.player = new Player(this.app, playerName, playerSprite);
-		this.resourceManager = new ResourceManager(this.app);
-		this.networkManager = new NetworkManager(this.handleServerUpdate.bind(this));
-
-		this.initializeGame();
+		this.initializeGame(playerName, playerSprite);
 		this.setupKeyboardControls();
-		this.app.ticker.add(() => this.gameLoop());
+		this.app.ticker.add(this.gameLoop, this);
 		this.networkManager.connect();
 	}
 
-	private initializeGame() {
+	private initializeGame(playerName: string, playerSprite: string) {
+		this.gameContainer = new PIXI.Container();
 		this.camera = new PIXI.Container();
-		this.app.stage.addChild(this.camera);
+		this.gameContainer.addChild(this.camera);
+		this.app.stage.addChild(this.gameContainer);
 
-		// Initialize game objects
+		this.world = new World(this.app);
 		this.world.initialize();
-		this.player.initialize();
-		this.resourceManager.initialize();
-		this.enemyManager.initialize();
-
-		// Add game objects to the camera container
 		this.camera.addChild(this.world.container);
-		this.camera.addChild(this.resourceManager.container);
-		this.camera.addChild(this.enemyManager.container);
+
+		this.player = new Player(this.app, playerName, playerSprite);
+		this.player.initialize();
 		this.camera.addChild(this.player.sprite);
 
-		// Initialize and add the HUD
+		this.resourceManager = new ResourceManager(this.app);
+		this.resourceManager.initialize();
+		this.camera.addChild(this.resourceManager.container);
+
+		this.enemyManager = new EnemyManager(this.app);
+		this.enemyManager.initialize();
+		this.camera.addChild(this.enemyManager.container);
+
 		this.hud = new HUD(this.player);
 		this.app.stage.addChild(this.hud.container);
 
+		this.networkManager = new NetworkManager(this.handleServerUpdate.bind(this));
+
 		// Set up Tweakpane
 		this.setupTweakpane();
+
+		// Center the camera on the player
+		this.centerCamera();
 	}
 
 	private setupTweakpane() {
@@ -101,7 +108,6 @@ export class Game {
 			expanded: true,
 		});
 
-		// Bind directly to the player's properties
 		folder.addBinding(this.player, 'acceleration', { min: 0, max: 1 });
 		folder.addBinding(this.player, 'deceleration', { min: 0, max: 1 });
 		folder.addBinding(this.player, 'friction', { min: 0, max: 1 });
@@ -112,52 +118,57 @@ export class Game {
 	private setupKeyboardControls() {
 		const keys: { [key: string]: boolean } = {};
 
-		window.addEventListener('keydown', (e) => {
+		window.addEventListener('keydown', e => {
 			keys[e.key.toLowerCase()] = true;
 		});
 
-		window.addEventListener('keyup', (e) => {
+		window.addEventListener('keyup', e => {
 			keys[e.key.toLowerCase()] = false;
 		});
 
 		this.app.ticker.add(() => {
-			let turningLeft = false;
-			let turningRight = false;
-			let movingForward = false;
-			let movingBackward = false;
-
-			if (keys['w'] || keys['arrowup']) movingForward = true;
-			if (keys['s'] || keys['arrowdown']) movingBackward = true;
-			if (keys['a'] || keys['arrowleft']) turningLeft = true;
-			if (keys['d'] || keys['arrowright']) turningRight = true;
+			const turningLeft = keys['a'] || keys['arrowleft'];
+			const turningRight = keys['d'] || keys['arrowright'];
+			const movingForward = keys['w'] || keys['arrowup'];
+			const movingBackward = keys['s'] || keys['arrowdown'];
 
 			this.player.control(turningLeft, turningRight, movingForward, movingBackward);
 		});
 	}
 
-	private gameLoop() {
+	private gameLoop(ticker: Ticker) {
+		const deltaTime = ticker.deltaTime;
+		// Update local player
+		this.player.update(deltaTime);
+
 		// Update game objects
-		this.resourceManager.update();
-		this.enemyManager.update(this.player);
+		this.world.update(deltaTime);
+		this.resourceManager.update(deltaTime);
+		this.enemyManager.update(this.player, deltaTime);
 		this.checkCollisions();
+
+		// Update other players
+		this.otherPlayers.forEach(player => player.update(deltaTime));
 
 		// Update HUD elements
 		this.hud.update();
 
 		// Center the camera on the player
+		this.centerCamera();
+
+		// Send network updates
+		const updateMessage: ClientMessage = {
+			type: 'updatePlayer',
+			data: this.player.getState(),
+		};
+		this.networkManager.sendUpdate(updateMessage);
+	}
+
+	private centerCamera() {
 		this.camera.position.set(
 			-this.player.position.x + this.app.screen.width / 2,
 			-this.player.position.y + this.app.screen.height / 2
 		);
-
-		// Send network updates
-		this.networkManager.sendUpdate({
-			playerId: this.player.id,
-			position: { x: this.player.position.x, y: this.player.position.y },
-			resources: this.player.resources,
-			health: this.player.health,
-			sprite: this.player.spriteUrl,
-		});
 	}
 
 	private checkCollisions() {
@@ -166,23 +177,54 @@ export class Game {
 	}
 
 	private handleServerUpdate(gameState: GameState) {
-		Object.values(gameState.players).forEach((playerState) => {
-			if (playerState.id === this.player.id) {
-				this.player.updateFromServer(playerState);
-			} else {
-				// Update or create other players
-				// Implementation needed
-			}
-		});
-		this.resourceManager.updateFromServer(gameState.resources);
-		this.enemyManager.updateFromServer(gameState.enemies);
+		if (gameState && gameState.players) {
+			Object.entries(gameState.players).forEach(([id, playerState]) => {
+				if (id === this.player.id) {
+					// Update local player's non-position properties
+					this.player.updateFromServer(playerState);
+				} else {
+					this.updateOrCreateOtherPlayer(playerState);
+				}
+			});
+
+			// Remove players that are no longer in the game state
+			this.otherPlayers.forEach((_, id) => {
+				if (!gameState.players[id]) {
+					this.removeOtherPlayer(id);
+				}
+			});
+		}
+
+		if (gameState && gameState.resources) {
+			this.resourceManager.updateFromServer(gameState.resources);
+		}
+
+		if (gameState && gameState.enemies) {
+			this.enemyManager.updateFromServer(gameState.enemies);
+		}
 	}
 
-	render() {
-		this.app.render();
+	private updateOrCreateOtherPlayer(playerState: PlayerState) {
+		let otherPlayer = this.otherPlayers.get(playerState.id);
+		if (!otherPlayer) {
+			otherPlayer = new Player(this.app, playerState.name, playerState.spriteUrl, false);
+			otherPlayer.initialize();
+			this.otherPlayers.set(playerState.id, otherPlayer);
+			this.camera.addChild(otherPlayer.sprite);
+		}
+		otherPlayer.updateFromServer(playerState);
 	}
 
-	destroy() {
-		this.app.destroy();
+	private removeOtherPlayer(playerId: string) {
+		const player = this.otherPlayers.get(playerId);
+		if (player) {
+			this.camera.removeChild(player.sprite);
+			this.otherPlayers.delete(playerId);
+		}
+	}
+
+	public resize() {
+		this.app.renderer.resize(window.innerWidth, window.innerHeight);
+		this.centerCamera();
 	}
 }

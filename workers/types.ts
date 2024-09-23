@@ -27,17 +27,12 @@ export interface GameState {
 	enemies: Enemy[];
 }
 
-export type MessageType =
-	| { type: 'updatePlayer'; player: Player }
-	| { type: 'collectResource'; playerId: string; resourceId: string }
-	| { type: 'spawnEnemy'; enemy: Enemy }
-	| { type: 'playerJoin'; player: Player }
-	| { type: 'playerLeave'; playerId: string };
-
-export interface ClientMessage {
-	type: MessageType['type'];
-	data: any;
-}
+export type ClientMessage =
+	| { type: 'updatePlayer'; data: Player }
+	| { type: 'collectResource'; data: { playerId: string; resourceId: string } }
+	| { type: 'spawnEnemy'; data: Enemy }
+	| { type: 'playerJoin'; data: Player }
+	| { type: 'playerLeave'; data: string };
 
 export interface ServerMessage {
 	type: 'gameState';
